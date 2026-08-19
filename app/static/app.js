@@ -29,6 +29,22 @@ function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
+async function loadSurveyLink() {
+  const link = document.getElementById("survey-link");
+  if (!link) return;
+  try {
+    const { survey_form_url } = await api("/api/ai/survey-url");
+    if (survey_form_url) {
+      link.href = survey_form_url;
+      link.style.display = "";
+    }
+  } catch (e) {
+    // 설문 링크는 부가 기능이므로 실패해도 조용히 무시
+  }
+}
+
+document.addEventListener("DOMContentLoaded", loadSurveyLink);
+
 function renderMarkdown(text) {
   const escaped = escapeHtml(text || "");
   const lines = escaped.split("\n");

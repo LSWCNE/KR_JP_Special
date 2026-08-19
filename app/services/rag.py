@@ -15,6 +15,7 @@ from collections import defaultdict
 from sqlalchemy.orm import Session
 
 from app.models import SurveyResponse
+from app.services import sheet_sync
 
 try:
     import anthropic
@@ -30,44 +31,82 @@ MAX_RESPONSES_PER_NATIONALITY = 150
 # 문항이 전부 자유 서술이라 고정 태그 체계는 없고, 시트 헤더 문구도 "한국어 / 日本語" 형태로
 # 조금씩 달라질 수 있어(예: "추천하고 싶은 상대국 명소" vs "일본인들에게 추천하고 싶은 한국 명소")
 # 정확히 일치시키는 대신 각 카테고리를 대표하는 한국어 키워드가 헤더에 포함되는지로 매칭한다.
-CATEGORIES = {
-    "movie": {
-        "ko": "영화", "ja": "映画",
+# 카테고리(이름/키워드/예시 질문)는 관리자 페이지에서 수정할 수 있도록 AppSetting에 JSON으로
+# 저장되며, 설정된 적이 없으면 아래 기본값을 사용한다.
+CATEGORIES_SETTING_KEY = "chat_categories"
+
+DEFAULT_CATEGORIES = [
+    {
+        "key": "movie", "ko": "영화", "ja": "映画",
         "keywords": ["영화"],
+        "example_ko": "일본 학생들이 좋아하는 한국 영화가 뭐야?",
+        "example_ja": "日本の学生が好きな韓国映画は?",
     },
-    "music": {
-        "ko": "음악", "ja": "音楽",
+    {
+        "key": "music", "ko": "음악", "ja": "音楽",
         "keywords": ["음악", "아티스트"],
+        "example_ko": "한국 학생들에게 인기있는 일본 음악은?",
+        "example_ja": "韓国の学生に人気の日本の音楽は?",
     },
-    "hobby": {
-        "ko": "취미", "ja": "趣味",
+    {
+        "key": "hobby", "ko": "취미", "ja": "趣味",
         "keywords": ["취미", "해보고 싶은 것", "경험"],
+        "example_ko": "", "example_ja": "",
     },
-    "food": {
-        "ko": "음식", "ja": "料理",
+    {
+        "key": "food", "ko": "음식", "ja": "料理",
         "keywords": ["음식"],
+        "example_ko": "일본 학생들이 좋아하는 한국 음식은?",
+        "example_ja": "日本の学生が好きな韓国料理は?",
     },
-    "travel": {
-        "ko": "여행", "ja": "旅行",
+    {
+        "key": "travel", "ko": "여행", "ja": "旅行",
         "keywords": ["여행지", "명소", "가보고 싶은 나라"],
+        "example_ko": "일본인에게 추천할 만한 한국 여행지 알려줘",
+        "example_ja": "日本人におすすめの韓国の旅行先を教えて",
     },
-    "anime": {
-        "ko": "애니메이션", "ja": "アニメ",
+    {
+        "key": "anime", "ko": "애니메이션", "ja": "アニメ",
         "keywords": ["애니"],
+        "example_ko": "요즘 유행하는 애니메이션 추천해줘",
+        "example_ja": "最近流行っているアニメを教えて",
     },
-}
+]
 
 
-def _question_in_category(question: str, category: str) -> bool:
-    return any(keyword in question for keyword in CATEGORIES[category]["keywords"])
+def load_categories_list(db: Session) -> list[dict]:
+    """관리자가 저장한 카테고리 목록(순서 보존)을 불러오고, 없으면 기본값을 반환."""
+    raw = sheet_sync.get_setting(db, CATEGORIES_SETTING_KEY)
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list) and data:
+                return data
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return DEFAULT_CATEGORIES
+
+
+def save_categories_list(db: Session, categories: list[dict]) -> None:
+    sheet_sync.set_setting(db, CATEGORIES_SETTING_KEY, json.dumps(categories, ensure_ascii=False))
+
+
+def load_categories(db: Session) -> dict[str, dict]:
+    """key -> 카테고리 정보 dict (매칭/라벨 조회용)."""
+    return {c["key"]: c for c in load_categories_list(db) if c.get("key")}
+
+
+def _question_in_category(question: str, category: str, categories: dict[str, dict]) -> bool:
+    return any(keyword in question for keyword in categories[category].get("keywords", []))
 
 
 def build_response_context(db: Session, category: str | None = None) -> dict:
     """국적별 응답 건수와, 문항별로 정리된 원문 답변 목록을 구성.
 
-    category가 지정되면 CATEGORIES[category]의 키워드와 매칭되는 문항만 포함한다.
+    category가 지정되면 해당 카테고리의 키워드와 매칭되는 문항만 포함한다.
     """
-    category = category if category in CATEGORIES else None
+    categories = load_categories(db)
+    category = category if category in categories else None
 
     responses = (
         db.query(SurveyResponse)
@@ -92,7 +131,7 @@ def build_response_context(db: Session, category: str | None = None) -> dict:
             continue
         per_nat_used[r.nationality] += 1
         for question, answer in (r.raw_answers or {}).items():
-            if category is not None and not _question_in_category(question, category):
+            if category is not None and not _question_in_category(question, category, categories):
                 continue
             if answer:
                 by_question[question][r.nationality].append(answer)
@@ -102,6 +141,7 @@ def build_response_context(db: Session, category: str | None = None) -> dict:
         "by_question": by_question,
         "truncated": truncated,
         "category": category,
+        "category_labels": {"ko": categories[category]["ko"], "ja": categories[category]["ja"]} if category else None,
     }
 
 
@@ -249,10 +289,9 @@ def _build_user_content(question: str, context: dict) -> str:
     )
 
 
-def _build_system_prompt(lang: str, category: str | None) -> str:
+def _build_system_prompt(lang: str, category: str | None, category_label: str | None) -> str:
     prompt = SYSTEM_PROMPTS[lang]
-    if category in CATEGORIES:
-        category_label = CATEGORIES[category][lang]
+    if category and category_label:
         prompt += CATEGORY_SYSTEM_EXTRA[lang].format(category_label=category_label)
         if category == "music":
             prompt += MUSIC_SYSTEM_EXTRA[lang]
@@ -274,11 +313,12 @@ def call_claude(question: str, context: dict, lang: str = "ko") -> str:
 
     client = anthropic.Anthropic(api_key=api_key)
     user_content = _build_user_content(question, context)
+    category_label = (context.get("category_labels") or {}).get(lang)
     try:
         response = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=800,
-            system=_build_system_prompt(lang, context.get("category")),
+            system=_build_system_prompt(lang, context.get("category"), category_label),
             messages=[{"role": "user", "content": user_content}],
         )
         return response.content[0].text

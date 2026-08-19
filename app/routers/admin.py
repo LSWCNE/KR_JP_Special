@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import SurveyResponse
-from app.schemas import SettingsIn, ResponseOverrideIn
-from app.services import sheet_sync
+from app.schemas import SettingsIn, ResponseOverrideIn, CategoriesIn
+from app.services import sheet_sync, rag
 from app.services.admin_auth import require_admin_api
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin_api)])
@@ -16,16 +16,20 @@ def get_settings(db: Session = Depends(get_db)):
     return {
         "csv_url": sheet_sync.get_setting(db, sheet_sync.CSV_URL_KEY),
         "last_synced_at": sheet_sync.get_setting(db, sheet_sync.LAST_SYNCED_AT_KEY),
+        "survey_form_url": sheet_sync.get_setting(db, sheet_sync.SURVEY_FORM_URL_KEY),
     }
 
 
 @router.post("/settings")
 def update_settings(payload: SettingsIn, db: Session = Depends(get_db)):
-    url = payload.csv_url.strip()
-    sheet_sync.set_setting(db, sheet_sync.CSV_URL_KEY, url)
     result = {"ok": True}
-    if not sheet_sync.looks_like_published_csv_url(url):
-        result["warning"] = sheet_sync.PUBLISH_HELP_MESSAGE
+    if payload.csv_url is not None:
+        url = payload.csv_url.strip()
+        sheet_sync.set_setting(db, sheet_sync.CSV_URL_KEY, url)
+        if not sheet_sync.looks_like_published_csv_url(url):
+            result["warning"] = sheet_sync.PUBLISH_HELP_MESSAGE
+    if payload.survey_form_url is not None:
+        sheet_sync.set_setting(db, sheet_sync.SURVEY_FORM_URL_KEY, payload.survey_form_url.strip())
     return result
 
 
@@ -107,6 +111,23 @@ def get_response(response_id: int, db: Session = Depends(get_db)):
         "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
         "raw_answers": r.raw_answers,
     }
+
+
+@router.get("/categories")
+def get_categories(db: Session = Depends(get_db)):
+    return rag.load_categories_list(db)
+
+
+@router.post("/categories")
+def update_categories(payload: CategoriesIn, db: Session = Depends(get_db)):
+    categories = [c.dict() for c in payload.categories]
+    keys = [c["key"].strip() for c in categories]
+    if not all(keys):
+        raise HTTPException(400, "카테고리 key는 비어있을 수 없습니다.")
+    if len(keys) != len(set(keys)):
+        raise HTTPException(400, "카테고리 key는 서로 달라야 합니다.")
+    rag.save_categories_list(db, categories)
+    return {"ok": True}
 
 
 @router.patch("/responses/{response_id}")

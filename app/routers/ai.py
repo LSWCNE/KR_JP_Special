@@ -6,17 +6,27 @@ from app.database import get_db
 from app.models import AIQuery
 from app.schemas import ChatIn
 from app.services.admin_auth import require_admin_api
-from app.services.rag import CATEGORIES, build_response_context, call_claude
+from app.services.rag import build_response_context, call_claude, load_categories_list
+from app.services import sheet_sync
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
 @router.get("/categories")
-def categories():
+def categories(db: Session = Depends(get_db)):
     return [
-        {"key": key, "ko": info["ko"], "ja": info["ja"]}
-        for key, info in CATEGORIES.items()
+        {
+            "key": c["key"], "ko": c["ko"], "ja": c["ja"],
+            "example_ko": c.get("example_ko", ""), "example_ja": c.get("example_ja", ""),
+        }
+        for c in load_categories_list(db)
     ]
+
+
+@router.get("/survey-url")
+def survey_url(db: Session = Depends(get_db)):
+    """설문 참여 링크 (구글 폼 URL). 관리자가 설정한 경우에만 값이 채워짐 - 공개 정보."""
+    return {"survey_form_url": sheet_sync.get_setting(db, sheet_sync.SURVEY_FORM_URL_KEY)}
 
 
 @router.post("/chat")

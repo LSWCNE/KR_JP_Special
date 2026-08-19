@@ -16,6 +16,40 @@
   <p class="hint" id="sync-status" style="margin-top:10px"></p>
 </div>
 
+<div class="card">
+  <h2 style="margin-top:0" data-i18n="admin.survey_url_section_title">설문 참여 링크 (홈 화면 버튼)</h2>
+  <label style="margin-top:0" data-i18n="admin.survey_url_label">설문조사 페이지 URL (구글 폼)</label>
+  <input type="text" id="survey-url" placeholder="https://docs.google.com/forms/d/e/.../viewform">
+  <div style="display:flex; gap:8px; margin-top:12px;">
+    <button class="primary" style="margin-top:0" id="save-survey-url-btn" data-i18n="admin.save_btn">URL 저장</button>
+  </div>
+  <p class="hint" id="survey-url-status" style="margin-top:10px"></p>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0" data-i18n="admin.categories_section_title">채팅 카테고리 관리</h2>
+  <p class="hint" data-i18n="admin.categories_hint">카테고리 이름, 매칭 키워드(설문 문항에 이 단어가 포함되면 해당 카테고리로 분류), 채팅창에 보여줄 예시 질문을 수정할 수 있습니다.</p>
+  <div style="overflow-x:auto">
+  <table id="categories-table">
+    <thead><tr>
+      <th data-i18n="admin.cat_th_key">key</th>
+      <th data-i18n="admin.cat_th_ko">한국어 이름</th>
+      <th data-i18n="admin.cat_th_ja">일본어 이름</th>
+      <th data-i18n="admin.cat_th_keywords">매칭 키워드 (콤마로 구분)</th>
+      <th data-i18n="admin.cat_th_example_ko">예시 질문(한국어)</th>
+      <th data-i18n="admin.cat_th_example_ja">예시 질문(일본어)</th>
+      <th></th>
+    </tr></thead>
+    <tbody id="categories-tbody"></tbody>
+  </table>
+  </div>
+  <div style="display:flex; gap:8px; margin-top:12px;">
+    <button class="secondary" id="add-category-btn" data-i18n="admin.cat_add_btn">카테고리 추가</button>
+    <button class="primary" id="save-categories-btn" data-i18n="admin.save_btn">저장</button>
+  </div>
+  <p class="hint" id="categories-status" style="margin-top:10px"></p>
+</div>
+
 <div class="stat-grid" id="stat-grid"></div>
 
 <h2 data-i18n="admin.question_counts_title">문항별 응답 건수</h2>
@@ -45,6 +79,7 @@
 async function loadSettings() {
   const s = await api("/api/admin/settings");
   document.getElementById("csv-url").value = s.csv_url || "";
+  document.getElementById("survey-url").value = s.survey_form_url || "";
   document.getElementById("sync-status").textContent = s.last_synced_at
     ? t("admin.last_sync_prefix") + s.last_synced_at.slice(0, 19).replace("T", " ")
     : t("admin.no_sync_yet");
@@ -57,6 +92,12 @@ document.getElementById("save-url-btn").addEventListener("click", async () => {
   document.getElementById("sync-status").textContent = res.warning
     ? `⚠ ${res.warning}`
     : t("admin.url_saved");
+});
+
+document.getElementById("save-survey-url-btn").addEventListener("click", async () => {
+  const survey_form_url = document.getElementById("survey-url").value.trim();
+  await api("/api/admin/settings", { method: "POST", body: JSON.stringify({ survey_form_url }) });
+  document.getElementById("survey-url-status").textContent = t("admin.url_saved");
 });
 
 document.getElementById("sync-btn").addEventListener("click", async () => {
@@ -130,6 +171,59 @@ async function toggleExcluded(id, value) {
   loadStats();
 }
 
+let categoriesData = [];
+
+function renderCategoriesTable() {
+  const tbody = document.getElementById("categories-tbody");
+  tbody.innerHTML = categoriesData.map((c, i) => `
+    <tr>
+      <td><input type="text" value="${c.key || ""}" data-field="key" data-idx="${i}" style="width:90px"></td>
+      <td><input type="text" value="${c.ko || ""}" data-field="ko" data-idx="${i}" style="width:80px"></td>
+      <td><input type="text" value="${c.ja || ""}" data-field="ja" data-idx="${i}" style="width:80px"></td>
+      <td><input type="text" value="${(c.keywords || []).join(", ")}" data-field="keywords" data-idx="${i}" style="width:180px"></td>
+      <td><input type="text" value="${c.example_ko || ""}" data-field="example_ko" data-idx="${i}" style="width:220px"></td>
+      <td><input type="text" value="${c.example_ja || ""}" data-field="example_ja" data-idx="${i}" style="width:220px"></td>
+      <td><button class="secondary" data-remove-idx="${i}">✕</button></td>
+    </tr>
+  `).join("");
+
+  tbody.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const idx = Number(inp.dataset.idx);
+      const field = inp.dataset.field;
+      categoriesData[idx][field] = field === "keywords"
+        ? inp.value.split(",").map(s => s.trim()).filter(Boolean)
+        : inp.value;
+    });
+  });
+  tbody.querySelectorAll("[data-remove-idx]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      categoriesData.splice(Number(btn.dataset.removeIdx), 1);
+      renderCategoriesTable();
+    });
+  });
+}
+
+document.getElementById("add-category-btn").addEventListener("click", () => {
+  categoriesData.push({ key: "", ko: "", ja: "", keywords: [], example_ko: "", example_ja: "" });
+  renderCategoriesTable();
+});
+
+document.getElementById("save-categories-btn").addEventListener("click", async () => {
+  const statusEl = document.getElementById("categories-status");
+  try {
+    await api("/api/admin/categories", { method: "POST", body: JSON.stringify({ categories: categoriesData }) });
+    statusEl.textContent = t("admin.url_saved");
+  } catch (e) {
+    statusEl.textContent = t("chat.error_prefix") + e.message;
+  }
+});
+
+async function loadCategoriesAdmin() {
+  categoriesData = await api("/api/admin/categories");
+  renderCategoriesTable();
+}
+
 async function loadAiLogs() {
   const logs = await api("/api/ai/logs?limit=10");
   document.getElementById("ai-log-list").innerHTML = logs.length ? logs.map(l => `
@@ -144,6 +238,7 @@ function loadAllDynamic() {
   loadSettings();
   loadStats();
   loadResponses();
+  loadCategoriesAdmin();
   loadAiLogs();
 }
 

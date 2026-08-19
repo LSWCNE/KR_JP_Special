@@ -10,9 +10,23 @@ class ChatIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
-    csv_url: str
+    csv_url: Optional[str] = None
+    survey_form_url: Optional[str] = None
 
 
 class ResponseOverrideIn(BaseModel):
     nationality: Optional[str] = None  # "KR" | "JP" | "UNKNOWN"
     excluded: Optional[bool] = None
+
+
+class CategoryIn(BaseModel):
+    key: str
+    ko: str
+    ja: str
+    keywords: list[str] = []
+    example_ko: str = ""
+    example_ja: str = ""
+
+
+class CategoriesIn(BaseModel):
+    categories: list[CategoryIn]

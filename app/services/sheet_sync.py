@@ -19,6 +19,7 @@ from app.services.lang_detect import classify_response_row
 CSV_URL_KEY = "csv_url"
 LAST_SYNCED_AT_KEY = "last_synced_at"
 LAST_SYNC_SUMMARY_KEY = "last_sync_summary"
+SURVEY_FORM_URL_KEY = "survey_form_url"
 
 TIMESTAMP_HEADER_CANDIDATES = {"타임스탬프", "timestamp", "タイムスタンプ"}
 

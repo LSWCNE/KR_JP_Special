@@ -14,7 +14,7 @@
     <input type="text" id="chat-input" data-i18n-placeholder="chat.placeholder" placeholder="질문을 입력하세요">
     <button class="primary" style="margin-top:0" id="send-btn" data-i18n="chat.send">전송</button>
   </div>
-  <p class="hint" id="chat-hint" style="margin-top:10px" data-i18n="chat.hint">예시: "일본 학생들이 좋아하는 한국 음식은?" · "한국 학생들에게 인기있는 일본 애니는?" · "일본인에게 추천할 만한 한국 여행지 알려줘" · "요즘 유행하는 애니메이션 추천해줘"</p>
+  <p class="hint" id="chat-hint" style="margin-top:10px"></p>
 </div>
 {% endblock %}
 {% block extra_script %}
@@ -72,9 +72,22 @@ async function loadCategories() {
     categories = [];
   }
   renderCategoryPills();
+  renderExampleHint();
 }
 
-document.addEventListener("kj-lang-changed", renderCategoryPills);
+function renderExampleHint() {
+  const examples = categories
+    .map(c => (getLang() === "ja" ? c.example_ja : c.example_ko))
+    .filter(Boolean);
+  document.getElementById("chat-hint").textContent = examples.length
+    ? t("chat.example_prefix") + examples.map(q => `"${q}"`).join(" · ")
+    : "";
+}
+
+document.addEventListener("kj-lang-changed", () => {
+  renderCategoryPills();
+  renderExampleHint();
+});
 loadCategories();
 
 function appendMsg(role, text) {
