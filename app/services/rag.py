@@ -27,105 +27,73 @@ CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
 # 응답 데이터가 너무 커지면 컨텍스트가 비대해지므로 국적별 상한을 둔다.
 MAX_RESPONSES_PER_NATIONALITY = 150
 
-# 설문 문항(구글 시트 CSV 헤더 원문)을 채팅 카테고리로 묶는다.
-# 문항이 전부 자유 서술이라 고정 태그 체계는 없고, 시트 헤더 문구도 "한국어 / 日本語" 형태로
-# 조금씩 달라질 수 있어(예: "추천하고 싶은 상대국 명소" vs "일본인들에게 추천하고 싶은 한국 명소")
-# 정확히 일치시키는 대신 각 카테고리를 대표하는 한국어 키워드가 헤더에 포함되는지로 매칭한다.
-# 카테고리 자체(키/매칭 키워드)는 문항 매칭과 직결되는 부분이라 코드에 고정해두고,
-# 화면에 보이는 이름(ko/ja)과 채팅창 예시 질문만 관리자 페이지에서 수정할 수 있도록
-# AppSetting에 JSON으로 저장한다.
-CATEGORIES_OVERRIDE_SETTING_KEY = "chat_categories_overrides"
-EDITABLE_CATEGORY_FIELDS = ("ko", "ja", "example_ko", "example_ja")
+# 채팅 화면의 카테고리(이름/예시 질문)는 관리자 페이지에서 자유롭게 추가/삭제/수정할 수
+# 있도록 AppSetting에 JSON 목록으로 저장한다. 카테고리는 설문 문항을 걸러내는 용도가
+# 아니라 Claude에게 "지금 이 주제에 집중해서 답하라"고 안내하는 용도로만 쓰이므로(아래
+# CATEGORY_SYSTEM_EXTRA 참고), 문항 매칭 키워드 같은 별도 설정이 필요 없다.
+CATEGORIES_SETTING_KEY = "chat_categories"
 
 DEFAULT_CATEGORIES = [
     {
         "key": "movie", "ko": "영화", "ja": "映画",
-        "keywords": ["영화"],
         "example_ko": "일본 학생들이 좋아하는 한국 영화가 뭐야?",
         "example_ja": "日本の学生が好きな韓国映画は?",
     },
     {
         "key": "music", "ko": "음악", "ja": "音楽",
-        "keywords": ["음악", "아티스트"],
         "example_ko": "한국 학생들에게 인기있는 일본 음악은?",
         "example_ja": "韓国の学生に人気の日本の音楽は?",
     },
     {
         "key": "hobby", "ko": "취미", "ja": "趣味",
-        "keywords": ["취미", "해보고 싶은 것", "경험"],
         "example_ko": "", "example_ja": "",
     },
     {
         "key": "food", "ko": "음식", "ja": "料理",
-        "keywords": ["음식"],
         "example_ko": "일본 학생들이 좋아하는 한국 음식은?",
         "example_ja": "日本の学生が好きな韓国料理は?",
     },
     {
         "key": "travel", "ko": "여행", "ja": "旅行",
-        "keywords": ["여행지", "명소", "가보고 싶은 나라"],
         "example_ko": "일본인에게 추천할 만한 한국 여행지 알려줘",
         "example_ja": "日本人におすすめの韓国の旅行先を教えて",
     },
     {
         "key": "anime", "ko": "애니메이션", "ja": "アニメ",
-        "keywords": ["애니"],
         "example_ko": "요즘 유행하는 애니메이션 추천해줘",
         "example_ja": "最近流行っているアニメを教えて",
     },
 ]
 
 
-def _load_overrides(db: Session) -> dict[str, dict]:
-    raw = sheet_sync.get_setting(db, CATEGORIES_OVERRIDE_SETTING_KEY)
+def load_categories_list(db: Session) -> list[dict]:
+    """관리자가 저장한 카테고리 목록(순서 보존)을 불러오고, 없으면 기본값을 반환."""
+    raw = sheet_sync.get_setting(db, CATEGORIES_SETTING_KEY)
     if raw:
         try:
             data = json.loads(raw)
-            if isinstance(data, dict):
+            if isinstance(data, list) and data:
                 return data
         except (json.JSONDecodeError, TypeError):
             pass
-    return {}
+    return DEFAULT_CATEGORIES
 
 
-def load_categories_list(db: Session) -> list[dict]:
-    """고정된 카테고리 목록(순서 보존)에, 관리자가 저장한 이름/예시 수정값을 덧씌워 반환."""
-    overrides = _load_overrides(db)
-    result = []
-    for cat in DEFAULT_CATEGORIES:
-        merged = dict(cat)
-        override = overrides.get(cat["key"], {})
-        for field in EDITABLE_CATEGORY_FIELDS:
-            if field in override:
-                merged[field] = override[field]
-        result.append(merged)
-    return result
-
-
-def save_category_overrides(db: Session, categories: list[dict]) -> None:
-    """key, ko, ja, example_ko, example_ja만 반영. key는 기존 카테고리와 일치해야 한다."""
-    valid_keys = {c["key"] for c in DEFAULT_CATEGORIES}
-    overrides = {}
-    for c in categories:
-        if c["key"] not in valid_keys:
-            continue
-        overrides[c["key"]] = {field: c[field] for field in EDITABLE_CATEGORY_FIELDS if field in c}
-    sheet_sync.set_setting(db, CATEGORIES_OVERRIDE_SETTING_KEY, json.dumps(overrides, ensure_ascii=False))
+def save_categories_list(db: Session, categories: list[dict]) -> None:
+    sheet_sync.set_setting(db, CATEGORIES_SETTING_KEY, json.dumps(categories, ensure_ascii=False))
 
 
 def load_categories(db: Session) -> dict[str, dict]:
-    """key -> 카테고리 정보 dict (매칭/라벨 조회용)."""
-    return {c["key"]: c for c in load_categories_list(db)}
-
-
-def _question_in_category(question: str, category: str, categories: dict[str, dict]) -> bool:
-    return any(keyword in question for keyword in categories[category].get("keywords", []))
+    """key -> 카테고리 정보 dict (라벨 조회용)."""
+    return {c["key"]: c for c in load_categories_list(db) if c.get("key")}
 
 
 def build_response_context(db: Session, category: str | None = None) -> dict:
     """국적별 응답 건수와, 문항별로 정리된 원문 답변 목록을 구성.
 
-    category가 지정되면 해당 카테고리의 키워드와 매칭되는 문항만 포함한다.
+    category는 문항 데이터를 걸러내지 않는다 (카테고리에 키워드가 없으므로 항상 전체
+    문항을 포함) - 대신 시스템 프롬프트에 카테고리 라벨을 전달해 Claude가 해당 주제
+    위주로 답하도록 안내하는 데만 쓰인다.
     """
     categories = load_categories(db)
     category = category if category in categories else None
@@ -153,8 +121,6 @@ def build_response_context(db: Session, category: str | None = None) -> dict:
             continue
         per_nat_used[r.nationality] += 1
         for question, answer in (r.raw_answers or {}).items():
-            if category is not None and not _question_in_category(question, category, categories):
-                continue
             if answer:
                 by_question[question][r.nationality].append(answer)
 
@@ -221,14 +187,16 @@ SYSTEM_PROMPTS = {
 CATEGORY_SYSTEM_EXTRA = {
     "ko": (
         "\n중요: 지금 사용자는 '{category_label}' 카테고리를 선택한 상태입니다. "
-        "<survey_data>에는 이미 이 카테고리에 해당하는 문항만 들어 있습니다.\n"
+        "<survey_data>에는 전체 문항이 들어 있으니, 그중 '{category_label}' 주제와 관련된 "
+        "문항의 답변만 참고해서 답변하세요.\n"
         "11. 사용자의 질문이 '{category_label}' 카테고리와 관련이 없다면(예: 다른 카테고리 주제나 "
         "설문과 무관한 잡담·일반 지식 질문), 답변하지 말고 \"이 카테고리에서는 '{category_label}' 관련 "
         "질문만 답변할 수 있어요. 다른 주제가 궁금하시면 해당 카테고리를 선택해주세요.\"라고 안내하세요.\n"
     ),
     "ja": (
         "\n重要: ユーザーは現在「{category_label}」カテゴリーを選択しています。"
-        "<survey_data>には、このカテゴリーに該当する設問のみが含まれています。\n"
+        "<survey_data>には全ての設問が含まれているので、その中から「{category_label}」というテーマに"
+        "関連する設問の回答だけを参考にして答えてください。\n"
         "11. ユーザーの質問が「{category_label}」カテゴリーと関係ない場合(他のカテゴリーの話題や、"
         "アンケートと無関係な雑談・一般知識の質問など)は回答せず、「このカテゴリーでは「{category_label}」"
         "に関する質問にのみお答えできます。他のテーマが気になる場合は該当するカテゴリーを選択してください。」"
