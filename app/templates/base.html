@@ -10,8 +10,13 @@
 <nav class="nav">
   <a class="brand" href="/" data-i18n="nav.brand">한일문화교류 MVP</a>
   <a class="tab {% block nav_home %}{% endblock %}" href="/" data-i18n="nav.chat">AI 채팅</a>
-  <a class="tab {% block nav_admin %}{% endblock %}" href="/admin" data-i18n="nav.admin">관리자</a>
+  {% if is_admin %}<a class="tab {% block nav_admin %}{% endblock %}" href="/admin" data-i18n="nav.admin">관리자</a>{% endif %}
   <button class="secondary" id="lang-toggle-btn" style="margin-left:auto">日本語</button>
+  {% if is_admin %}
+  <form method="post" action="/admin/logout" style="margin:0">
+    <button class="secondary" type="submit" data-i18n="nav.logout">로그아웃</button>
+  </form>
+  {% endif %}
 </nav>
 <div class="container">
 {% block content %}{% endblock %}

@@ -6,8 +6,9 @@ from app.database import get_db
 from app.models import SurveyResponse
 from app.schemas import SettingsIn, ResponseOverrideIn
 from app.services import sheet_sync
+from app.services.admin_auth import require_admin_api
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin_api)])
 
 
 @router.get("/settings")

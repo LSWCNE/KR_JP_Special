@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AIQuery
 from app.schemas import ChatIn
+from app.services.admin_auth import require_admin_api
 from app.services.rag import CATEGORIES, build_response_context, call_claude
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -34,7 +35,7 @@ def chat(payload: ChatIn, db: Session = Depends(get_db)):
     return {"answer": answer, "query_id": log.id}
 
 
-@router.get("/logs")
+@router.get("/logs", dependencies=[Depends(require_admin_api)])
 def recent_logs(limit: int = 20, db: Session = Depends(get_db)):
     logs = db.query(AIQuery).order_by(AIQuery.id.desc()).limit(limit).all()
     return [

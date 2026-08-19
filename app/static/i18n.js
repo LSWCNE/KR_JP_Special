@@ -5,7 +5,12 @@ const I18N = {
     "nav.brand": "한일문화교류 MVP",
     "nav.chat": "AI 채팅",
     "nav.admin": "관리자",
+    "nav.logout": "로그아웃",
     "lang.toggle": "日本語",
+
+    "admin_login.title": "관리자 로그인",
+    "admin_login.password_label": "비밀번호",
+    "admin_login.submit_btn": "로그인",
 
     "chat.title": "한일 문화교류 AI 채팅",
     "chat.subtitle": "구글 폼으로 수집한 한국·일본 학생들의 실제 설문 응답을 근거로, 질문에 답하고 콘텐츠를 추천해드립니다.",
@@ -64,7 +69,12 @@ const I18N = {
     "nav.brand": "日韓文化交流 MVP",
     "nav.chat": "AIチャット",
     "nav.admin": "管理者",
+    "nav.logout": "ログアウト",
     "lang.toggle": "한국어",
+
+    "admin_login.title": "管理者ログイン",
+    "admin_login.password_label": "パスワード",
+    "admin_login.submit_btn": "ログイン",
 
     "chat.title": "日韓文化交流 AIチャット",
     "chat.subtitle": "Googleフォームで収集した韓国・日本の学生たちの実際のアンケート回答をもとに、質問に答えたりコンテンツをおすすめします。",
