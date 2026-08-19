@@ -186,27 +186,24 @@ SYSTEM_PROMPTS = {
 
 CATEGORY_SYSTEM_EXTRA = {
     "ko": (
-        "[최우선 규칙 - 아래의 다른 모든 지침보다 먼저 적용하세요]\n"
-        "지금 사용자는 '{category_label}' 카테고리를 선택한 상태입니다. 답변을 작성하기 전에 "
-        "사용자의 질문이 '{category_label}' 주제와 명확히 관련되어 있는지부터 판단하세요.\n"
-        "- 관련이 있는 경우: <survey_data>에서 '{category_label}' 주제와 관련된 항목만 근거로 삼아, "
-        "아래 지침에 따라 답변하세요.\n"
-        "- 관련이 없는 경우(다른 카테고리 주제, 설문과 무관한 잡담, 일반 지식 질문 등): 아래 지침을 "
-        "따르지 말고 다른 내용은 절대 덧붙이지 말고 정확히 다음 문장으로만 답변하세요: "
-        "\"이 카테고리에서는 '{category_label}' 관련 질문만 답변할 수 있어요. 다른 주제가 궁금하시면 "
-        "해당 카테고리를 선택해주세요.\"\n\n"
+        "[카테고리 안내] 지금 사용자는 '{category_label}' 카테고리를 선택한 상태입니다. "
+        "<survey_data>에는 전체 문항이 들어 있으니, 그중 '{category_label}' 주제와 관련된 "
+        "문항의 답변만 참고해서 답변하세요.\n\n"
     ),
     "ja": (
-        "[最優先ルール - 以下の他のすべての指示より先に適用してください]\n"
-        "ユーザーは現在「{category_label}」カテゴリーを選択しています。回答を作成する前に、"
-        "ユーザーの質問が「{category_label}」というテーマと明確に関連しているかをまず判断してください。\n"
-        "- 関連している場合: <survey_data>の中から「{category_label}」に関連する項目だけを根拠にし、"
-        "以下の指示に従って回答してください。\n"
-        "- 関連していない場合(他のカテゴリーの話題、アンケートと無関係な雑談、一般知識の質問など): "
-        "以下の指示には従わず、他の内容を一切付け加えず、正確に次の文だけで回答してください: "
-        "「このカテゴリーでは「{category_label}」に関する質問にのみお答えできます。他のテーマが気になる"
-        "場合は該当するカテゴリーを選択してください。」\n\n"
+        "[カテゴリー案内] ユーザーは現在「{category_label}」カテゴリーを選択しています。"
+        "<survey_data>には全ての設問が含まれているので、その中から「{category_label}」というテーマに"
+        "関連する設問の回答だけを参考にして答えてください。\n\n"
     ),
+}
+
+# 카테고리가 선택된 상태에서 질문이 그 주제와 무관하면, 메인 답변 생성 전에 별도의
+# 짧은 판별 호출로 걸러내고 아래 고정 문구를 그대로 반환한다. 프롬프트 지시문 하나에
+# 판별과 답변 생성을 모두 맡기면 LLM이 지시를 놓치고 그냥 답변해버리는 경우가 있어,
+# 판별을 분리해 항상 정확히 같은 문구가 나가도록 보장한다.
+CATEGORY_MISMATCH_MESSAGES = {
+    "ko": "현재 카테고리와 맞지 않는 질문입니다.",
+    "ja": "現在のカテゴリーに合わない質問です。",
 }
 
 MUSIC_SYSTEM_EXTRA = {
@@ -293,6 +290,31 @@ def _build_system_prompt(lang: str, category: str | None, category_label: str | 
     return prompt
 
 
+def _is_question_on_topic(client, question: str, category_label: str) -> bool:
+    """카테고리 주제와 질문의 관련 여부만 판별하는 짧은 별도 호출. 정확히 YES/NO 한 단어만
+    받도록 강제해서, 메인 답변 프롬프트에 판단을 맡길 때보다 판별을 안정적으로 만든다."""
+    try:
+        response = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=5,
+            system=(
+                "You are a strict topic classifier. Reply with exactly one word, "
+                "YES or NO, and nothing else."
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Category topic: {category_label}\n"
+                    f"User question: {question}\n\n"
+                    "Is the user question clearly about this category topic? Reply YES or NO only."
+                ),
+            }],
+        )
+        return response.content[0].text.strip().upper().startswith("Y")
+    except Exception:  # noqa: BLE001
+        return True  # 판별 호출 자체가 실패하면 기존처럼 답변을 시도한다
+
+
 def call_claude(question: str, context: dict, lang: str = "ko") -> str:
     lang = lang if lang in SYSTEM_PROMPTS else "ko"
 
@@ -307,13 +329,18 @@ def call_claude(question: str, context: dict, lang: str = "ko") -> str:
         return _msg(lang, "no_data")
 
     client = anthropic.Anthropic(api_key=api_key)
-    user_content = _build_user_content(question, context)
+    category = context.get("category")
     category_label = (context.get("category_labels") or {}).get(lang)
+
+    if category and category_label and not _is_question_on_topic(client, question, category_label):
+        return CATEGORY_MISMATCH_MESSAGES.get(lang, CATEGORY_MISMATCH_MESSAGES["ko"])
+
+    user_content = _build_user_content(question, context)
     try:
         response = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=800,
-            system=_build_system_prompt(lang, context.get("category"), category_label),
+            system=_build_system_prompt(lang, category, category_label),
             messages=[{"role": "user", "content": user_content}],
         )
         return response.content[0].text
