@@ -186,21 +186,26 @@ SYSTEM_PROMPTS = {
 
 CATEGORY_SYSTEM_EXTRA = {
     "ko": (
-        "\n중요: 지금 사용자는 '{category_label}' 카테고리를 선택한 상태입니다. "
-        "<survey_data>에는 전체 문항이 들어 있으니, 그중 '{category_label}' 주제와 관련된 "
-        "문항의 답변만 참고해서 답변하세요.\n"
-        "11. 사용자의 질문이 '{category_label}' 카테고리와 관련이 없다면(예: 다른 카테고리 주제나 "
-        "설문과 무관한 잡담·일반 지식 질문), 답변하지 말고 \"이 카테고리에서는 '{category_label}' 관련 "
-        "질문만 답변할 수 있어요. 다른 주제가 궁금하시면 해당 카테고리를 선택해주세요.\"라고 안내하세요.\n"
+        "[최우선 규칙 - 아래의 다른 모든 지침보다 먼저 적용하세요]\n"
+        "지금 사용자는 '{category_label}' 카테고리를 선택한 상태입니다. 답변을 작성하기 전에 "
+        "사용자의 질문이 '{category_label}' 주제와 명확히 관련되어 있는지부터 판단하세요.\n"
+        "- 관련이 있는 경우: <survey_data>에서 '{category_label}' 주제와 관련된 항목만 근거로 삼아, "
+        "아래 지침에 따라 답변하세요.\n"
+        "- 관련이 없는 경우(다른 카테고리 주제, 설문과 무관한 잡담, 일반 지식 질문 등): 아래 지침을 "
+        "따르지 말고 다른 내용은 절대 덧붙이지 말고 정확히 다음 문장으로만 답변하세요: "
+        "\"이 카테고리에서는 '{category_label}' 관련 질문만 답변할 수 있어요. 다른 주제가 궁금하시면 "
+        "해당 카테고리를 선택해주세요.\"\n\n"
     ),
     "ja": (
-        "\n重要: ユーザーは現在「{category_label}」カテゴリーを選択しています。"
-        "<survey_data>には全ての設問が含まれているので、その中から「{category_label}」というテーマに"
-        "関連する設問の回答だけを参考にして答えてください。\n"
-        "11. ユーザーの質問が「{category_label}」カテゴリーと関係ない場合(他のカテゴリーの話題や、"
-        "アンケートと無関係な雑談・一般知識の質問など)は回答せず、「このカテゴリーでは「{category_label}」"
-        "に関する質問にのみお答えできます。他のテーマが気になる場合は該当するカテゴリーを選択してください。」"
-        "と案内してください。\n"
+        "[最優先ルール - 以下の他のすべての指示より先に適用してください]\n"
+        "ユーザーは現在「{category_label}」カテゴリーを選択しています。回答を作成する前に、"
+        "ユーザーの質問が「{category_label}」というテーマと明確に関連しているかをまず判断してください。\n"
+        "- 関連している場合: <survey_data>の中から「{category_label}」に関連する項目だけを根拠にし、"
+        "以下の指示に従って回答してください。\n"
+        "- 関連していない場合(他のカテゴリーの話題、アンケートと無関係な雑談、一般知識の質問など): "
+        "以下の指示には従わず、他の内容を一切付け加えず、正確に次の文だけで回答してください: "
+        "「このカテゴリーでは「{category_label}」に関する質問にのみお答えできます。他のテーマが気になる"
+        "場合は該当するカテゴリーを選択してください。」\n\n"
     ),
 }
 
@@ -282,7 +287,7 @@ def _build_user_content(question: str, context: dict) -> str:
 def _build_system_prompt(lang: str, category: str | None, category_label: str | None) -> str:
     prompt = SYSTEM_PROMPTS[lang]
     if category and category_label:
-        prompt += CATEGORY_SYSTEM_EXTRA[lang].format(category_label=category_label)
+        prompt = CATEGORY_SYSTEM_EXTRA[lang].format(category_label=category_label) + prompt
         if category == "music":
             prompt += MUSIC_SYSTEM_EXTRA[lang]
     return prompt
