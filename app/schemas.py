@@ -23,7 +23,6 @@ class CategoryIn(BaseModel):
     key: str
     ko: str
     ja: str
-    keywords: list[str] = []
     example_ko: str = ""
     example_ja: str = ""
 

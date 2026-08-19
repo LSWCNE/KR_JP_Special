@@ -120,13 +120,7 @@ def get_categories(db: Session = Depends(get_db)):
 
 @router.post("/categories")
 def update_categories(payload: CategoriesIn, db: Session = Depends(get_db)):
-    categories = [c.dict() for c in payload.categories]
-    keys = [c["key"].strip() for c in categories]
-    if not all(keys):
-        raise HTTPException(400, "카테고리 key는 비어있을 수 없습니다.")
-    if len(keys) != len(set(keys)):
-        raise HTTPException(400, "카테고리 key는 서로 달라야 합니다.")
-    rag.save_categories_list(db, categories)
+    rag.save_category_overrides(db, [c.dict() for c in payload.categories])
     return {"ok": True}
 
 

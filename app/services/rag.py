@@ -31,9 +31,11 @@ MAX_RESPONSES_PER_NATIONALITY = 150
 # 문항이 전부 자유 서술이라 고정 태그 체계는 없고, 시트 헤더 문구도 "한국어 / 日本語" 형태로
 # 조금씩 달라질 수 있어(예: "추천하고 싶은 상대국 명소" vs "일본인들에게 추천하고 싶은 한국 명소")
 # 정확히 일치시키는 대신 각 카테고리를 대표하는 한국어 키워드가 헤더에 포함되는지로 매칭한다.
-# 카테고리(이름/키워드/예시 질문)는 관리자 페이지에서 수정할 수 있도록 AppSetting에 JSON으로
-# 저장되며, 설정된 적이 없으면 아래 기본값을 사용한다.
-CATEGORIES_SETTING_KEY = "chat_categories"
+# 카테고리 자체(키/매칭 키워드)는 문항 매칭과 직결되는 부분이라 코드에 고정해두고,
+# 화면에 보이는 이름(ko/ja)과 채팅창 예시 질문만 관리자 페이지에서 수정할 수 있도록
+# AppSetting에 JSON으로 저장한다.
+CATEGORIES_OVERRIDE_SETTING_KEY = "chat_categories_overrides"
+EDITABLE_CATEGORY_FIELDS = ("ko", "ja", "example_ko", "example_ja")
 
 DEFAULT_CATEGORIES = [
     {
@@ -74,26 +76,46 @@ DEFAULT_CATEGORIES = [
 ]
 
 
-def load_categories_list(db: Session) -> list[dict]:
-    """관리자가 저장한 카테고리 목록(순서 보존)을 불러오고, 없으면 기본값을 반환."""
-    raw = sheet_sync.get_setting(db, CATEGORIES_SETTING_KEY)
+def _load_overrides(db: Session) -> dict[str, dict]:
+    raw = sheet_sync.get_setting(db, CATEGORIES_OVERRIDE_SETTING_KEY)
     if raw:
         try:
             data = json.loads(raw)
-            if isinstance(data, list) and data:
+            if isinstance(data, dict):
                 return data
         except (json.JSONDecodeError, TypeError):
             pass
-    return DEFAULT_CATEGORIES
+    return {}
 
 
-def save_categories_list(db: Session, categories: list[dict]) -> None:
-    sheet_sync.set_setting(db, CATEGORIES_SETTING_KEY, json.dumps(categories, ensure_ascii=False))
+def load_categories_list(db: Session) -> list[dict]:
+    """고정된 카테고리 목록(순서 보존)에, 관리자가 저장한 이름/예시 수정값을 덧씌워 반환."""
+    overrides = _load_overrides(db)
+    result = []
+    for cat in DEFAULT_CATEGORIES:
+        merged = dict(cat)
+        override = overrides.get(cat["key"], {})
+        for field in EDITABLE_CATEGORY_FIELDS:
+            if field in override:
+                merged[field] = override[field]
+        result.append(merged)
+    return result
+
+
+def save_category_overrides(db: Session, categories: list[dict]) -> None:
+    """key, ko, ja, example_ko, example_ja만 반영. key는 기존 카테고리와 일치해야 한다."""
+    valid_keys = {c["key"] for c in DEFAULT_CATEGORIES}
+    overrides = {}
+    for c in categories:
+        if c["key"] not in valid_keys:
+            continue
+        overrides[c["key"]] = {field: c[field] for field in EDITABLE_CATEGORY_FIELDS if field in c}
+    sheet_sync.set_setting(db, CATEGORIES_OVERRIDE_SETTING_KEY, json.dumps(overrides, ensure_ascii=False))
 
 
 def load_categories(db: Session) -> dict[str, dict]:
     """key -> 카테고리 정보 dict (매칭/라벨 조회용)."""
-    return {c["key"]: c for c in load_categories_list(db) if c.get("key")}
+    return {c["key"]: c for c in load_categories_list(db)}
 
 
 def _question_in_category(question: str, category: str, categories: dict[str, dict]) -> bool:
