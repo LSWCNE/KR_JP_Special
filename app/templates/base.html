@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}한일문화교류서비스{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/" data-i18n="nav.brand">한일문화교류 MVP</a>
+  <a class="tab {% block nav_home %}{% endblock %}" href="/" data-i18n="nav.chat">AI 채팅</a>
+  <a class="tab {% block nav_admin %}{% endblock %}" href="/admin" data-i18n="nav.admin">관리자</a>
+  <button class="secondary" id="lang-toggle-btn" style="margin-left:auto">日本語</button>
+</nav>
+<div class="container">
+{% block content %}{% endblock %}
+</div>
+<script src="/static/i18n.js"></script>
+<script src="/static/app.js"></script>
+{% block extra_script %}{% endblock %}
+</body>
+</html>
