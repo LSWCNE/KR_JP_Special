@@ -6,6 +6,6 @@ services:
     env_file:
       - .env
     volumes:
-      - ./app:/app/app
+      - ./app:/app
       - ./sample_data:/app/sample_data
       - ./kj_exchange.db:/app/kj_exchange.db
