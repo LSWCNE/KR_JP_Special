@@ -26,9 +26,49 @@ CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
 # 응답 데이터가 너무 커지면 컨텍스트가 비대해지므로 국적별 상한을 둔다.
 MAX_RESPONSES_PER_NATIONALITY = 150
 
+# 설문 문항(구글 시트 CSV 헤더 원문)을 채팅 카테고리로 묶는다.
+# 문항이 전부 자유 서술이라 고정 태그 체계는 없고, 시트 헤더 문구도 "한국어 / 日本語" 형태로
+# 조금씩 달라질 수 있어(예: "추천하고 싶은 상대국 명소" vs "일본인들에게 추천하고 싶은 한국 명소")
+# 정확히 일치시키는 대신 각 카테고리를 대표하는 한국어 키워드가 헤더에 포함되는지로 매칭한다.
+CATEGORIES = {
+    "movie": {
+        "ko": "영화", "ja": "映画",
+        "keywords": ["영화"],
+    },
+    "music": {
+        "ko": "음악", "ja": "音楽",
+        "keywords": ["음악", "아티스트"],
+    },
+    "hobby": {
+        "ko": "취미", "ja": "趣味",
+        "keywords": ["취미", "해보고 싶은 것", "경험"],
+    },
+    "food": {
+        "ko": "음식", "ja": "料理",
+        "keywords": ["음식"],
+    },
+    "travel": {
+        "ko": "여행", "ja": "旅行",
+        "keywords": ["여행지", "명소", "가보고 싶은 나라"],
+    },
+    "anime": {
+        "ko": "애니메이션", "ja": "アニメ",
+        "keywords": ["애니"],
+    },
+}
 
-def build_response_context(db: Session) -> dict:
-    """국적별 응답 건수와, 문항별로 정리된 원문 답변 목록을 구성."""
+
+def _question_in_category(question: str, category: str) -> bool:
+    return any(keyword in question for keyword in CATEGORIES[category]["keywords"])
+
+
+def build_response_context(db: Session, category: str | None = None) -> dict:
+    """국적별 응답 건수와, 문항별로 정리된 원문 답변 목록을 구성.
+
+    category가 지정되면 CATEGORIES[category]의 키워드와 매칭되는 문항만 포함한다.
+    """
+    category = category if category in CATEGORIES else None
+
     responses = (
         db.query(SurveyResponse)
         .filter(SurveyResponse.excluded == False)  # noqa: E712
@@ -52,6 +92,8 @@ def build_response_context(db: Session) -> dict:
             continue
         per_nat_used[r.nationality] += 1
         for question, answer in (r.raw_answers or {}).items():
+            if category is not None and not _question_in_category(question, category):
+                continue
             if answer:
                 by_question[question][r.nationality].append(answer)
 
@@ -59,6 +101,7 @@ def build_response_context(db: Session) -> dict:
         "counts": counts,
         "by_question": by_question,
         "truncated": truncated,
+        "category": category,
     }
 
 
@@ -112,6 +155,39 @@ SYSTEM_PROMPTS = {
 10. 回答では「アンケートデータによると」「何人が」「何人中」「回答者は」などの表現を不必要に繰り返さないでください。
 """,
 }
+
+CATEGORY_SYSTEM_EXTRA = {
+    "ko": (
+        "\n중요: 지금 사용자는 '{category_label}' 카테고리를 선택한 상태입니다. "
+        "<survey_data>에는 이미 이 카테고리에 해당하는 문항만 들어 있습니다.\n"
+        "11. 사용자의 질문이 '{category_label}' 카테고리와 관련이 없다면(예: 다른 카테고리 주제나 "
+        "설문과 무관한 잡담·일반 지식 질문), 답변하지 말고 \"이 카테고리에서는 '{category_label}' 관련 "
+        "질문만 답변할 수 있어요. 다른 주제가 궁금하시면 해당 카테고리를 선택해주세요.\"라고 안내하세요.\n"
+    ),
+    "ja": (
+        "\n重要: ユーザーは現在「{category_label}」カテゴリーを選択しています。"
+        "<survey_data>には、このカテゴリーに該当する設問のみが含まれています。\n"
+        "11. ユーザーの質問が「{category_label}」カテゴリーと関係ない場合(他のカテゴリーの話題や、"
+        "アンケートと無関係な雑談・一般知識の質問など)は回答せず、「このカテゴリーでは「{category_label}」"
+        "に関する質問にのみお答えできます。他のテーマが気になる場合は該当するカテゴリーを選択してください。」"
+        "と案内してください。\n"
+    ),
+}
+
+MUSIC_SYSTEM_EXTRA = {
+    "ko": (
+        "\n12. 음악을 추천할 때는 먼저 <survey_data>에서 실제로 언급된 곡/아티스트를 추천하고, "
+        "이어서 그 아티스트의 다른 곡 중 설문에는 없지만 당신이 알고 있는 곡을 1~2개 추가로 추천하세요. "
+        "이 추가 추천은 반드시 \"(AI 추가 추천, 설문 데이터에는 없음)\"이라고 표시해 설문 근거와 구분하세요."
+    ),
+    "ja": (
+        "\n12. 音楽をおすすめする際は、まず<survey_data>で実際に挙げられている曲・アーティストをおすすめし、"
+        "続けてそのアーティストの他の曲の中で、アンケートには出てこないがあなたが知っている曲を1〜2曲追加でおすすめしてください。"
+        "この追加のおすすめには必ず「(AIによる追加おすすめ、アンケートデータにはありません)」と明記し、"
+        "アンケート根拠のものと区別してください。"
+    ),
+}
+
 
 FALLBACK_MESSAGES = {
     "ko": {
@@ -173,6 +249,16 @@ def _build_user_content(question: str, context: dict) -> str:
     )
 
 
+def _build_system_prompt(lang: str, category: str | None) -> str:
+    prompt = SYSTEM_PROMPTS[lang]
+    if category in CATEGORIES:
+        category_label = CATEGORIES[category][lang]
+        prompt += CATEGORY_SYSTEM_EXTRA[lang].format(category_label=category_label)
+        if category == "music":
+            prompt += MUSIC_SYSTEM_EXTRA[lang]
+    return prompt
+
+
 def call_claude(question: str, context: dict, lang: str = "ko") -> str:
     lang = lang if lang in SYSTEM_PROMPTS else "ko"
 
@@ -192,7 +278,7 @@ def call_claude(question: str, context: dict, lang: str = "ko") -> str:
         response = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=800,
-            system=SYSTEM_PROMPTS[lang],
+            system=_build_system_prompt(lang, context.get("category")),
             messages=[{"role": "user", "content": user_content}],
         )
         return response.content[0].text

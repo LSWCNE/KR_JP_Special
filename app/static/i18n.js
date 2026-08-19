@@ -9,6 +9,10 @@ const I18N = {
 
     "chat.title": "한일 문화교류 AI 채팅",
     "chat.subtitle": "구글 폼으로 수집한 한국·일본 학생들의 실제 설문 응답을 근거로, 질문에 답하고 콘텐츠를 추천해드립니다.",
+    "chat.category_label": "카테고리 선택",
+    "chat.category_all": "전체",
+    "chat.category_hint_all": "카테고리를 선택하면 해당 주제 질문에만 집중해서 답변합니다.",
+    "chat.category_hint_selected": "'{category}' 카테고리가 선택되었습니다. 이 주제와 관련된 질문만 답변할 수 있어요.",
     "chat.placeholder": "질문을 입력하세요",
     "chat.send": "전송",
     "chat.hint": "예시: \"일본 학생들이 좋아하는 한국 음식은?\" · \"한국 학생들에게 인기있는 일본 애니는?\" · \"일본인에게 추천할 만한 한국 여행지 알려줘\" · \"요즘 유행하는 애니메이션 추천해줘\"",
@@ -64,6 +68,10 @@ const I18N = {
 
     "chat.title": "日韓文化交流 AIチャット",
     "chat.subtitle": "Googleフォームで収集した韓国・日本の学生たちの実際のアンケート回答をもとに、質問に答えたりコンテンツをおすすめします。",
+    "chat.category_label": "カテゴリーを選択",
+    "chat.category_all": "すべて",
+    "chat.category_hint_all": "カテゴリーを選ぶと、そのテーマの質問だけに集中して回答します。",
+    "chat.category_hint_selected": "「{category}」カテゴリーが選択されています。このテーマに関する質問のみお答えできます。",
     "chat.placeholder": "質問を入力してください",
     "chat.send": "送信",
     "chat.hint": "例:「日本の学生が好きな韓国料理は?」・「韓国の学生に人気の日本のアニメは?」・「日本人におすすめの韓国の旅行先を教えて」・「最近流行っているアニメを教えて」",

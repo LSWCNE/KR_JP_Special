@@ -5,20 +5,28 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AIQuery
 from app.schemas import ChatIn
-from app.services.rag import build_response_context, call_claude
+from app.services.rag import CATEGORIES, build_response_context, call_claude
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
+@router.get("/categories")
+def categories():
+    return [
+        {"key": key, "ko": info["ko"], "ja": info["ja"]}
+        for key, info in CATEGORIES.items()
+    ]
+
+
 @router.post("/chat")
 def chat(payload: ChatIn, db: Session = Depends(get_db)):
-    context = build_response_context(db)
+    context = build_response_context(db, category=payload.category)
     answer = call_claude(payload.question, context, lang=payload.lang or "ko")
 
     log = AIQuery(
         question=payload.question,
         answer=answer,
-        used_context={"counts": context["counts"]},
+        used_context={"counts": context["counts"], "category": context["category"]},
     )
     db.add(log)
     db.commit()
