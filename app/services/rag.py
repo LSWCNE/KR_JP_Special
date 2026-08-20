@@ -298,16 +298,18 @@ def _is_question_on_topic(client, question: str, category_label: str) -> bool:
             model=CLAUDE_MODEL,
             max_tokens=5,
             system=(
-                "You are a strict topic classifier. Reply with exactly one word, "
-                "YES or NO, and nothing else."
+                "You are a lenient topic-relevance classifier for a Korea-Japan student "
+                "culture-exchange survey chat app. The app has chat categories like movie, "
+                "music, hobby, food, travel, anime. Users ask short questions (often in Korean "
+                "or Japanese, sometimes terse noun-phrases without a verb) about what Korean or "
+                "Japanese students like/have/do regarding the selected category. Given a category "
+                "topic and a user question, decide if the question is about that topic. Default "
+                "to YES unless the question is clearly about a different topic entirely or is "
+                "unrelated small talk / general knowledge. Reply with exactly one word: YES or NO."
             ),
             messages=[{
                 "role": "user",
-                "content": (
-                    f"Category topic: {category_label}\n"
-                    f"User question: {question}\n\n"
-                    "Is the user question clearly about this category topic? Reply YES or NO only."
-                ),
+                "content": f"Category topic: {category_label}\nUser question: {question}\n\nYES or NO only.",
             }],
         )
         return response.content[0].text.strip().upper().startswith("Y")
