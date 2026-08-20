@@ -85,6 +85,7 @@ document.getElementById("save-survey-url-btn").addEventListener("click", async (
   const survey_form_url = document.getElementById("survey-url").value.trim();
   await api("/api/admin/settings", { method: "POST", body: JSON.stringify({ survey_form_url }) });
   document.getElementById("survey-url-status").textContent = t("admin.url_saved");
+  loadSurveyLink(); // 저장 직후 현재 탭의 "설문 참여" 버튼도 바로 갱신
 });
 
 document.getElementById("sync-btn").addEventListener("click", async () => {
