@@ -23,6 +23,7 @@ CSV_URL_KEY = "csv_url"
 LAST_SYNCED_AT_KEY = "last_synced_at"
 LAST_SYNC_SUMMARY_KEY = "last_sync_summary"
 SURVEY_FORM_URL_KEY = "survey_form_url"
+CHAT_PUBLISHED_KEY = "chat_published"
 
 TIMESTAMP_HEADER_CANDIDATES = {"타임스탬프", "timestamp", "タイムスタンプ"}
 
@@ -40,6 +41,11 @@ def set_setting(db: Session, key: str, value: str):
         row = AppSetting(key=key, value=value)
         db.add(row)
     db.commit()
+
+
+def is_chat_published(db: Session) -> bool:
+    """관리자가 '게시'를 누르기 전까지는 기본적으로 미게시 상태."""
+    return get_setting(db, CHAT_PUBLISHED_KEY) == "true"
 
 
 def _row_hash(row: dict) -> str:

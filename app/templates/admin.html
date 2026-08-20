@@ -6,6 +6,13 @@
 <p class="subtitle" data-i18n="admin.subtitle">구글 시트 동기화 상태와 응답 통계를 확인하고, 채팅 카테고리를 관리합니다.</p>
 
 <div class="card">
+  <h2 style="margin-top:0" data-i18n="admin.publish_section_title">채팅 게시</h2>
+  <p class="hint" data-i18n="admin.publish_hint">게시하기 전까지는 일반 사용자에게 AI 채팅이 "준비 중" 화면으로만 보이고 실제로 사용할 수 없습니다. 관리자는 게시 여부와 상관없이 항상 미리보기로 사용할 수 있습니다.</p>
+  <p style="margin-top:12px"><b id="publish-status-label"></b></p>
+  <button style="margin-top:12px" id="publish-toggle-btn"></button>
+</div>
+
+<div class="card">
   <h2 style="margin-top:0" data-i18n="admin.sheet_section_title">구글 시트 연동</h2>
   <label style="margin-top:0" data-i18n="admin.csv_label">웹에 게시(CSV) URL</label>
   <input type="text" id="csv-url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
@@ -45,6 +52,23 @@
 {% endblock %}
 {% block extra_script %}
 <script>
+let chatPublished = false;
+
+function renderPublishStatus() {
+  document.getElementById("publish-status-label").textContent = chatPublished
+    ? t("admin.publish_status_on")
+    : t("admin.publish_status_off");
+  const btn = document.getElementById("publish-toggle-btn");
+  btn.textContent = chatPublished ? t("admin.unpublish_btn") : t("admin.publish_btn");
+  btn.className = chatPublished ? "secondary" : "primary";
+}
+
+document.getElementById("publish-toggle-btn").addEventListener("click", async () => {
+  const res = await api("/api/admin/publish", { method: "POST", body: JSON.stringify({ published: !chatPublished }) });
+  chatPublished = res.chat_published;
+  renderPublishStatus();
+});
+
 async function loadSettings() {
   const s = await api("/api/admin/settings");
   document.getElementById("csv-url").value = s.csv_url || "";
@@ -52,6 +76,8 @@ async function loadSettings() {
   document.getElementById("sync-status").textContent = s.last_synced_at
     ? t("admin.last_sync_prefix") + s.last_synced_at.slice(0, 19).replace("T", " ")
     : t("admin.no_sync_yet");
+  chatPublished = !!s.chat_published;
+  renderPublishStatus();
 }
 
 document.getElementById("save-url-btn").addEventListener("click", async () => {

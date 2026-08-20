@@ -9,14 +9,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
-from app.database import Base, engine
+from app.database import Base, engine, get_db
 from app.routers import admin, ai
-from app.services import admin_auth
+from app.services import admin_auth, sheet_sync
 
 Base.metadata.create_all(bind=engine)
 
@@ -32,8 +33,12 @@ app.include_router(ai.router)
 
 
 @app.get("/")
-def home(request: Request):
-    return templates.TemplateResponse(request, "chat.html", {"is_admin": admin_auth.is_admin_request(request)})
+def home(request: Request, db: Session = Depends(get_db)):
+    is_admin = admin_auth.is_admin_request(request)
+    return templates.TemplateResponse(request, "chat.html", {
+        "is_admin": is_admin,
+        "chat_published": sheet_sync.is_chat_published(db),
+    })
 
 
 @app.get("/admin")

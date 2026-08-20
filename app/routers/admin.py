@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import SurveyResponse
-from app.schemas import SettingsIn, ResponseOverrideIn, CategoriesIn
+from app.schemas import SettingsIn, ResponseOverrideIn, CategoriesIn, PublishIn
 from app.services import sheet_sync, rag
 from app.services.admin_auth import require_admin_api
 
@@ -17,7 +17,14 @@ def get_settings(db: Session = Depends(get_db)):
         "csv_url": sheet_sync.get_setting(db, sheet_sync.CSV_URL_KEY),
         "last_synced_at": sheet_sync.get_setting(db, sheet_sync.LAST_SYNCED_AT_KEY),
         "survey_form_url": sheet_sync.get_setting(db, sheet_sync.SURVEY_FORM_URL_KEY),
+        "chat_published": sheet_sync.is_chat_published(db),
     }
+
+
+@router.post("/publish")
+def publish_chat(payload: PublishIn, db: Session = Depends(get_db)):
+    sheet_sync.set_setting(db, sheet_sync.CHAT_PUBLISHED_KEY, "true" if payload.published else "false")
+    return {"ok": True, "chat_published": payload.published}
 
 
 @router.post("/settings")

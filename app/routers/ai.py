@@ -1,11 +1,11 @@
 """기능③④ 통합: AI 채팅 (자연어 질문 -> 답변 + 추천)"""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AIQuery
 from app.schemas import ChatIn
-from app.services.admin_auth import require_admin_api
+from app.services.admin_auth import is_admin_request, require_admin_api
 from app.services.rag import build_response_context, call_claude, load_categories_list
 from app.services import sheet_sync
 
@@ -30,7 +30,10 @@ def survey_url(db: Session = Depends(get_db)):
 
 
 @router.post("/chat")
-def chat(payload: ChatIn, db: Session = Depends(get_db)):
+def chat(payload: ChatIn, request: Request, db: Session = Depends(get_db)):
+    if not sheet_sync.is_chat_published(db) and not is_admin_request(request):
+        raise HTTPException(403, "아직 채팅이 게시되지 않았습니다. 관리자가 게시할 때까지 기다려주세요.")
+
     context = build_response_context(db, category=payload.category)
     answer = call_claude(payload.question, context, lang=payload.lang or "ko")
 

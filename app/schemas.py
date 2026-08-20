@@ -29,3 +29,7 @@ class CategoryIn(BaseModel):
 
 class CategoriesIn(BaseModel):
     categories: list[CategoryIn]
+
+
+class PublishIn(BaseModel):
+    published: bool
