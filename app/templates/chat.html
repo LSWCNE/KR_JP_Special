@@ -81,13 +81,15 @@ function renderExampleQuestions() {
   container.innerHTML = "";
   const lang = getLang();
   for (const cat of categories) {
-    const example = lang === "ja" ? cat.example_ja : cat.example_ko;
-    if (!example) continue;
-    const pill = document.createElement("span");
-    pill.className = "choice-pill";
-    pill.textContent = example;
-    pill.addEventListener("click", () => askExample(cat.key, example));
-    container.appendChild(pill);
+    const examples = (lang === "ja" ? cat.examples_ja : cat.examples_ko) || [];
+    for (const example of examples) {
+      if (!example) continue;
+      const pill = document.createElement("span");
+      pill.className = "choice-pill";
+      pill.textContent = example;
+      pill.addEventListener("click", () => askExample(cat.key, example));
+      container.appendChild(pill);
+    }
   }
 }
 

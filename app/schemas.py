@@ -23,8 +23,8 @@ class CategoryIn(BaseModel):
     key: str
     ko: str
     ja: str
-    example_ko: str = ""
-    example_ja: str = ""
+    examples_ko: list[str] = []
+    examples_ja: list[str] = []
 
 
 class CategoriesIn(BaseModel):

@@ -17,7 +17,7 @@ def categories(db: Session = Depends(get_db)):
     return [
         {
             "key": c["key"], "ko": c["ko"], "ja": c["ja"],
-            "example_ko": c.get("example_ko", ""), "example_ja": c.get("example_ja", ""),
+            "examples_ko": c.get("examples_ko", []), "examples_ja": c.get("examples_ja", []),
         }
         for c in load_categories_list(db)
     ]
