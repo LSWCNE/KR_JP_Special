@@ -26,6 +26,32 @@ const categoryHint = document.getElementById("category-hint");
 
 let categories = [];       // [{key, ko, ja}, ...] — 서버에서 로드
 let selectedCategory = null; // null = 전체(제한 없음)
+let chatHistories = {};    // 카테고리별 대화 기록: { key: [{role, text}] }
+
+function historyKey(cat) {
+  return cat === null ? "__all__" : cat;
+}
+
+function currentHistory() {
+  const key = historyKey(selectedCategory);
+  if (!chatHistories[key]) chatHistories[key] = [];
+  return chatHistories[key];
+}
+
+function renderChatLog() {
+  log.innerHTML = "";
+  for (const entry of currentHistory()) {
+    const div = document.createElement("div");
+    div.className = `msg ${entry.role}`;
+    if (entry.role === "ai") {
+      div.innerHTML = renderMarkdown(entry.text);
+    } else {
+      div.textContent = entry.text;
+    }
+    log.appendChild(div);
+  }
+  log.scrollTop = log.scrollHeight;
+}
 
 function categoryLabel(cat) {
   return getLang() === "ja" ? cat.ja : cat.ko;
@@ -65,6 +91,7 @@ function selectCategory(key) {
   selectedCategory = key;
   renderCategoryPills();
   renderExampleQuestions();
+  renderChatLog();
 }
 
 async function loadCategories() {
@@ -111,6 +138,7 @@ function askExample(categoryKey, question) {
   selectedCategory = categoryKey;
   renderCategoryPills();
   renderExampleQuestions();
+  renderChatLog();
   document.getElementById("chat-input").value = question;
   send();
 }
@@ -127,12 +155,15 @@ function appendMsg(role, text) {
   div.textContent = text;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
+  div._entry = { role, text };
+  currentHistory().push(div._entry);
   return div;
 }
 
 function setAiMsg(div, text) {
   div.innerHTML = renderMarkdown(text);
   log.scrollTop = log.scrollHeight;
+  if (div._entry) div._entry.text = text;
 }
 
 async function send() {
@@ -150,7 +181,9 @@ async function send() {
     });
     setAiMsg(aiMsg, res.answer);
   } catch (e) {
-    aiMsg.textContent = t("chat.error_prefix") + e.message;
+    const errorText = t("chat.error_prefix") + e.message;
+    aiMsg.textContent = errorText;
+    if (aiMsg._entry) aiMsg._entry.text = errorText;
   }
 }
 
