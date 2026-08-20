@@ -2,8 +2,11 @@
 
 구글 폼 응답이 쌓이는 구글 시트를 파일 > 공유 > 웹에 게시 > CSV 로 발행하면
 `https://docs.google.com/spreadsheets/d/e/.../pub?output=csv` 형태의 URL이 생기고,
-이 URL은 인증 없이 누구나 최신 CSV를 받아볼 수 있다. 이 모듈은 그 URL을 주기적으로
-읽어와 SurveyResponse 테이블에 반영(upsert)한다.
+이 URL은 인증 없이 누구나 최신 CSV를 받아볼 수 있다. 이 모듈은 동기화할 때마다
+기존 SurveyResponse를 전부 지우고 그 시점의 CSV 내용으로 완전히 새로 채운다 -
+분석은 항상 "현재 연결된 시트" 기준으로만 이뤄지고, 과거 동기화 시점의 응답은
+누적해서 남지 않는다 (그만큼 국적 수동 보정/제외 처리 같은 관리자 작업도 동기화할
+때마다 초기화된다).
 """
 import csv
 import hashlib
@@ -102,10 +105,13 @@ def parse_csv_rows(csv_text: str) -> list[dict]:
 
 
 def sync_rows(db: Session, rows: list[dict]) -> dict:
-    """파싱된 CSV 행들을 SurveyResponse로 upsert. 반환: 동기화 요약 통계."""
+    """기존 SurveyResponse를 모두 지우고, CSV 행들로 완전히 새로 채운다.
+    반환: 동기화 요약 통계."""
+    db.query(SurveyResponse).delete()
+
     new_count = 0
-    skipped_count = 0
-    updated_count = 0
+    duplicate_count = 0
+    seen_keys = set()
 
     for row in rows:
         # 타임스탬프 컬럼과 그 외 문항 컬럼 분리
@@ -123,12 +129,10 @@ def sync_rows(db: Session, rows: list[dict]) -> dict:
             continue  # 완전히 빈 행은 스킵
 
         row_key = timestamp_value.strip() if timestamp_value else _row_hash(answers)
-        existing = db.query(SurveyResponse).filter(
-            SurveyResponse.external_row_key == row_key
-        ).first()
-        if existing:
-            skipped_count += 1
+        if row_key in seen_keys:
+            duplicate_count += 1
             continue
+        seen_keys.add(row_key)
 
         nationality, confidence = classify_response_row(answers)
         submitted_at = _parse_timestamp(timestamp_value) if timestamp_value else None
@@ -146,8 +150,7 @@ def sync_rows(db: Session, rows: list[dict]) -> dict:
     return {
         "total_rows_in_csv": len(rows),
         "new": new_count,
-        "skipped_existing": skipped_count,
-        "updated": updated_count,
+        "duplicates_in_sheet": duplicate_count,
     }
 
 

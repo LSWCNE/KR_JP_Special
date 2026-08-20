@@ -92,7 +92,7 @@ document.getElementById("sync-btn").addEventListener("click", async () => {
   statusEl.textContent = t("admin.syncing");
   try {
     const res = await api("/api/admin/sync", { method: "POST" });
-    statusEl.textContent = t("admin.sync_done", { new: res.new, skipped: res.skipped_existing, total: res.total_rows_in_csv });
+    statusEl.textContent = t("admin.sync_done", { new: res.new, duplicates: res.duplicates_in_sheet, total: res.total_rows_in_csv });
     loadStats();
     loadResponses();
   } catch (e) {
