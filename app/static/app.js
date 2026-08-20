@@ -34,16 +34,19 @@ async function loadSurveyLink() {
   if (!link) return;
   try {
     const { survey_form_url } = await api("/api/ai/survey-url");
-    if (survey_form_url) {
-      link.href = survey_form_url;
-      link.style.display = "";
-    }
+    link.href = survey_form_url || "#";
+    link.style.display = survey_form_url ? "" : "none";
   } catch (e) {
     // 설문 링크는 부가 기능이므로 실패해도 조용히 무시
   }
 }
 
 document.addEventListener("DOMContentLoaded", loadSurveyLink);
+// 다른 탭(예: 관리자 페이지)에서 URL을 바꾼 뒤 이 탭으로 돌아왔을 때도
+// 새로고침 없이 최신 값을 반영하도록, 탭이 다시 보일 때마다 재조회한다.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") loadSurveyLink();
+});
 
 function renderMarkdown(text) {
   const escaped = escapeHtml(text || "");
