@@ -10,11 +10,12 @@
   <div class="choice-group" id="category-group"></div>
   <p class="hint" id="category-hint" style="margin-top:6px"></p>
   <div class="chat-log" id="chat-log"></div>
+  <p class="hint" id="example-label" style="margin-bottom:6px" data-i18n="chat.example_prefix">예시 질문</p>
+  <div class="choice-group" id="example-group" style="margin-bottom:12px"></div>
   <div style="display:flex; gap:8px;">
     <input type="text" id="chat-input" data-i18n-placeholder="chat.placeholder" placeholder="질문을 입력하세요">
     <button class="primary" style="margin-top:0" id="send-btn" data-i18n="chat.send">전송</button>
   </div>
-  <p class="hint" id="chat-hint" style="margin-top:10px"></p>
 </div>
 {% endblock %}
 {% block extra_script %}
@@ -72,21 +73,34 @@ async function loadCategories() {
     categories = [];
   }
   renderCategoryPills();
-  renderExampleHint();
+  renderExampleQuestions();
 }
 
-function renderExampleHint() {
-  const examples = categories
-    .map(c => (getLang() === "ja" ? c.example_ja : c.example_ko))
-    .filter(Boolean);
-  document.getElementById("chat-hint").textContent = examples.length
-    ? t("chat.example_prefix") + examples.map(q => `"${q}"`).join(" · ")
-    : "";
+function renderExampleQuestions() {
+  const container = document.getElementById("example-group");
+  container.innerHTML = "";
+  const lang = getLang();
+  for (const cat of categories) {
+    const example = lang === "ja" ? cat.example_ja : cat.example_ko;
+    if (!example) continue;
+    const pill = document.createElement("span");
+    pill.className = "choice-pill";
+    pill.textContent = example;
+    pill.addEventListener("click", () => askExample(cat.key, example));
+    container.appendChild(pill);
+  }
+}
+
+function askExample(categoryKey, question) {
+  selectedCategory = categoryKey;
+  renderCategoryPills();
+  document.getElementById("chat-input").value = question;
+  send();
 }
 
 document.addEventListener("kj-lang-changed", () => {
   renderCategoryPills();
-  renderExampleHint();
+  renderExampleQuestions();
 });
 loadCategories();
 

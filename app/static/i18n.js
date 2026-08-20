@@ -23,7 +23,7 @@ const I18N = {
     "chat.send": "전송",
     "chat.generating": "답변을 생성하는 중...",
     "chat.error_prefix": "오류: ",
-    "chat.example_prefix": "예시: ",
+    "chat.example_prefix": "예시 질문 (클릭하면 바로 질문됩니다)",
 
     "admin.title": "데이터 관리 대시보드",
     "admin.subtitle": "구글 시트 동기화 상태와 응답 통계를 확인하고, 채팅 카테고리를 관리합니다.",
@@ -77,7 +77,7 @@ const I18N = {
     "chat.send": "送信",
     "chat.generating": "回答を作成しています...",
     "chat.error_prefix": "エラー: ",
-    "chat.example_prefix": "例: ",
+    "chat.example_prefix": "質問例(クリックするとすぐ質問できます)",
 
     "admin.title": "データ管理ダッシュボード",
     "admin.subtitle": "Googleスプレッドシートの同期状況と回答統計を確認し、チャットカテゴリーを管理します。",
