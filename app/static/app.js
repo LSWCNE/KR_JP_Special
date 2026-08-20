@@ -13,12 +13,6 @@ async function api(path, options = {}) {
   return res.json();
 }
 
-function natBadge(nat) {
-  if (nat === "KR") return `<span class="badge kr">${t("badge.kr")}</span>`;
-  if (nat === "JP") return `<span class="badge jp">${t("badge.jp")}</span>`;
-  return `<span class="badge flag">${t("badge.unknown")}</span>`;
-}
-
 // 간단한 마크다운 -> HTML 변환 (AI 답변 등 신뢰할 수 없는 텍스트에 사용, XSS 방지를 위해 먼저 이스케이프 후 변환)
 function escapeHtml(str) {
   return str

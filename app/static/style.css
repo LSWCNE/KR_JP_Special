@@ -11,8 +11,6 @@
   --series-jp: #eb6834;   /* categorical slot 2 - orange */
   --seq-blue-500: #256abf;
   --seq-blue-300: #6da7ec;
-  --status-critical: #d03b3b;
-  --status-good: #0ca30c;
   --radius: 10px;
 }
 
@@ -75,19 +73,6 @@ h2 { font-size: 17px; margin: 28px 0 12px; }
   padding: 20px;
   margin-bottom: 16px;
 }
-
-.badge {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  color: #fff;
-}
-.badge.kr { background: var(--series-kr); }
-.badge.jp { background: var(--series-jp); }
-.badge.flag { background: var(--status-critical); }
-.badge.ok { background: var(--status-good); }
 
 label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
 input[type=text], select, textarea {

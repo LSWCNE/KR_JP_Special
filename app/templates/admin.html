@@ -3,7 +3,7 @@
 {% block nav_admin %}active{% endblock %}
 {% block content %}
 <h1 data-i18n="admin.title">데이터 관리 대시보드</h1>
-<p class="subtitle" data-i18n="admin.subtitle">구글 시트 동기화 상태와 응답 국적 자동 판별 결과를 점검·보정합니다.</p>
+<p class="subtitle" data-i18n="admin.subtitle">구글 시트 동기화 상태와 응답 통계를 확인하고, 채팅 카테고리를 관리합니다.</p>
 
 <div class="card">
   <h2 style="margin-top:0" data-i18n="admin.sheet_section_title">구글 시트 연동</h2>
@@ -42,24 +42,6 @@
 <h2 data-i18n="admin.question_counts_title">문항별 응답 건수</h2>
 <div class="card" id="question-bars"></div>
 
-<h2 data-i18n="admin.review_title">국적 판별 검토가 필요한 응답</h2>
-<div class="card">
-  <label style="margin-top:0"><input type="checkbox" id="needs-review-only" checked style="width:auto; display:inline-block; margin-right:6px"> <span data-i18n="admin.review_checkbox_label">검토 필요 응답만 보기 (미판별 또는 낮은 신뢰도)</span></label>
-  <table id="responses-table">
-    <thead><tr>
-      <th data-i18n="admin.th_id">ID</th>
-      <th data-i18n="admin.th_nationality">국적</th>
-      <th data-i18n="admin.th_confidence">신뢰도</th>
-      <th data-i18n="admin.th_preview">미리보기</th>
-      <th data-i18n="admin.th_submitted_at">제출시각</th>
-      <th data-i18n="admin.th_correction">보정</th>
-    </tr></thead>
-    <tbody></tbody>
-  </table>
-</div>
-
-<h2 data-i18n="admin.ai_log_title">최근 AI 질의 로그</h2>
-<div class="card" id="ai-log-list"></div>
 {% endblock %}
 {% block extra_script %}
 <script>
@@ -95,7 +77,6 @@ document.getElementById("sync-btn").addEventListener("click", async () => {
     const res = await api("/api/admin/sync", { method: "POST" });
     statusEl.textContent = t("admin.sync_done", { new: res.new, duplicates: res.duplicates_in_sheet, total: res.total_rows_in_csv });
     loadStats();
-    loadResponses();
   } catch (e) {
     statusEl.textContent = t("chat.error_prefix") + e.message;
   }
@@ -121,42 +102,6 @@ async function loadStats() {
       <div class="bar-value">${n}</div>
     </div>
   `).join("");
-}
-
-async function loadResponses() {
-  const needsReviewOnly = document.getElementById("needs-review-only").checked;
-  const rows = await api(`/api/admin/responses?needs_review_only=${needsReviewOnly}`);
-  document.querySelector("#responses-table tbody").innerHTML = rows.map(r => `
-    <tr>
-      <td>${r.id}</td>
-      <td>${natBadge(r.nationality)} ${r.nationality_manual ? `<span class="hint">${t("admin.manual_tag")}</span>` : ""}</td>
-      <td>${r.nationality_confidence}</td>
-      <td class="hint" title="${r.preview}">${r.preview.length > 60 ? r.preview.slice(0, 60) + "…" : r.preview}</td>
-      <td class="hint">${(r.submitted_at || "").slice(0, 16).replace("T", " ")}</td>
-      <td>
-        <select onchange="overrideNationality(${r.id}, this.value)" style="width:auto; display:inline-block; padding:4px 6px;">
-          <option value="">${t("admin.select_default")}</option>
-          <option value="KR">${t("admin.select_kr")}</option>
-          <option value="JP">${t("admin.select_jp")}</option>
-          <option value="UNKNOWN">${t("admin.select_unknown")}</option>
-        </select>
-        <button class="secondary" onclick="toggleExcluded(${r.id}, ${!r.excluded})">${r.excluded ? t("admin.unexclude_btn") : t("admin.exclude_btn")}</button>
-      </td>
-    </tr>
-  `).join("") || `<tr><td colspan="6" class="hint">${t("admin.no_review_needed")}</td></tr>`;
-}
-
-async function overrideNationality(id, value) {
-  if (!value) return;
-  await api(`/api/admin/responses/${id}`, { method: "PATCH", body: JSON.stringify({ nationality: value }) });
-  loadResponses();
-  loadStats();
-}
-
-async function toggleExcluded(id, value) {
-  await api(`/api/admin/responses/${id}`, { method: "PATCH", body: JSON.stringify({ excluded: value }) });
-  loadResponses();
-  loadStats();
 }
 
 let categoriesData = [];
@@ -229,25 +174,12 @@ async function loadCategoriesAdmin() {
   renderCategoriesList();
 }
 
-async function loadAiLogs() {
-  const logs = await api("/api/ai/logs?limit=10");
-  document.getElementById("ai-log-list").innerHTML = logs.length ? logs.map(l => `
-    <div class="content-item">
-      <b>Q.</b> ${l.question}<br>
-      <span class="hint"><b>A.</b> ${(l.answer || "").slice(0, 200)}${(l.answer || "").length > 200 ? "..." : ""}</span>
-    </div>
-  `).join("") : `<p class="hint">${t("admin.no_ai_log")}</p>`;
-}
-
 function loadAllDynamic() {
   loadSettings();
   loadStats();
-  loadResponses();
   loadCategoriesAdmin();
-  loadAiLogs();
 }
 
-document.getElementById("needs-review-only").addEventListener("change", loadResponses);
 document.addEventListener("kj-lang-changed", loadAllDynamic);
 
 loadAllDynamic();
